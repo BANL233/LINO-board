@@ -146,44 +146,44 @@
 <div class="tactical-board">
     <div class="sidebar">
         <div class="room-control">
-            <h3>🔗 自定义房间</h3>
+            <h3>自定义房间</h3>
             <input type="text" id="roomNameInput" placeholder="输入房间名称 (例如 clubhouse)">
             <div>
-                <button id="createRoomBtn">🏠 创建房间 (房主)</button>
-                <button id="joinRoomBtn">🚪 加入房间</button>
+                <button id="createRoomBtn">创建房间 (房主)</button>
+                <button id="joinRoomBtn">加入房间</button>
             </div>
-            <div id="roomStatus" class="status" style="margin-top:6px">⚡ 未连接</div>
+            <div id="roomStatus" class="status" style="margin-top:6px">未连接</div>
         </div>
         <div>
-            <h3>🛠️ 工具</h3>
+            <h3>工具</h3>
             <div class="tools" id="toolbar">
-                <button id="selectTool" class="active-tool">🔍 选择</button>
-                <button id="circleTool">⚪ 添加圆形</button>
-                <button id="lineTool">📏 画线</button>
-                <button id="textTool">📝 文字</button>
-                <button id="deleteTool">🗑️ 删除</button>
-                <button id="undoBtn">↩️ 撤销</button>
-                <button id="clearBtn">🧹 清空画布</button>
+                <button id="selectTool" class="active-tool">选择</button>
+                <button id="circleTool">添加圆形</button>
+                <button id="lineTool">画线</button>
+                <button id="textTool">文字</button>
+                <button id="deleteTool">删除</button>
+                <button id="undoBtn">撤销</button>
+                <button id="clearBtn">清空画布</button>
             </div>
         </div>
         <div>
-            <h3>🗺️ 地图 (由你提供)</h3>
+            <h3>地图</h3>
             <div class="map-control">
                 <input type="text" id="mapUrlInput" placeholder="输入地图图片URL 或 上传">
                 <button id="loadMapBtn">加载地图</button>
             </div>
             <div class="map-control">
-                <label for="uploadMap">📁 本地上传图片</label>
+                <label for="uploadMap">本地上传图片</label>
                 <input type="file" id="uploadMap" accept="image/jpeg,image/png,image/webp">
             </div>
         </div>
         <div>
-            <h3>💾 战术板管理</h3>
+            <h3>战术板管理</h3>
             <div class="file-ops">
-                <button id="saveBtn">💾 保存战术 (JSON)</button>
-                <label for="loadFile">📂 加载战术文件</label>
+                <button id="saveBtn">保存战术 (JSON)</button>
+                <label for="loadFile">加载战术文件</label>
                 <input type="file" id="loadFile" accept=".json">
-                <button id="exportImgBtn">📸 导出为图片</button>
+                <button id="exportImgBtn">导出为图片</button>
             </div>
         </div>
     </div>
@@ -196,48 +196,39 @@
 <script>
     // ---------- 多人同步 (PeerJS 房主模式) ----------
     let peer = null;
-    let isHost = false;          // 当前用户是否是房主
-    let connections = [];        // 房主储存所有连接，非房主只储存与房主的连接
-    let hostConnection = null;   // 非房主与房主的连接
+    let isHost = false;
+    let connections = [];
+    let hostConnection = null;
     let myId = null;
     let isSyncing = false;
 
-    // 房主广播画布状态给所有成员
     function broadcastFullCanvas() {
-        if (!isHost) return;              // 只有房主可以广播
+        if (!isHost) return;
         if (isSyncing) return;
         isSyncing = true;
         const canvasJSON = JSON.stringify(canvas.toJSON());
         for (let conn of connections) {
-            if (conn.open) {
-                conn.send({ type: 'sync', canvasJSON });
-            }
+            if (conn.open) conn.send({ type: 'sync', canvasJSON });
         }
         setTimeout(() => { isSyncing = false; }, 50);
     }
 
-    // 非房主发送自己的操作（实际上所有操作由房主广播，非房主只需告知房主自己做了改动，房主再广播）
-    // 为了简单，我们让所有非房主的画布操作都通过房主转发：非房主不直接广播，而是将操作发送给房主，房主再同步给大家。
-    // 但为了代码复用，我们统一：任何画布改动都调用 sendCanvasUpdate，房主广播给所有人，非房主发送给房主。
     function sendCanvasUpdate() {
         if (isSyncing) return;
         const canvasJSON = JSON.stringify(canvas.toJSON());
         if (isHost) {
-            // 房主广播
             isSyncing = true;
             for (let conn of connections) {
                 if (conn.open) conn.send({ type: 'sync', canvasJSON });
             }
             setTimeout(() => { isSyncing = false; }, 50);
         } else {
-            // 非房主发送给房主
             if (hostConnection && hostConnection.open) {
                 hostConnection.send({ type: 'sync', canvasJSON });
             }
         }
     }
 
-    // 接收来自房主或成员的同步消息
     function applySync(canvasJSON) {
         if (!isSyncing) {
             isSyncing = true;
@@ -248,21 +239,18 @@
         }
     }
 
-    // 创建房主 Peer
     function createHost(roomName) {
         if (peer) peer.destroy();
-        peer = new Peer(roomName);   // 使用房间名作为房主的ID
+        peer = new Peer(roomName);
         peer.on('open', id => {
             myId = id;
             isHost = true;
-            document.getElementById('roomStatus').innerHTML = `✅ 房主模式，房间名: ${id} | 等待成员加入...`;
+            document.getElementById('roomStatus').innerHTML = `房主模式，房间名: ${id} | 等待成员加入...`;
         });
         peer.on('connection', conn => {
             connections.push(conn);
             conn.on('data', data => {
                 if (data.type === 'sync') {
-                    // 成员发送来的画布更新，房主自动广播给所有人（包括自己不需要再加载）
-                    // 注意：这里不需要再 applySync，因为房主自己操作已经触发过更新，直接转发
                     for (let c of connections) {
                         if (c !== conn && c.open) c.send(data);
                     }
@@ -270,70 +258,59 @@
             });
             conn.on('close', () => {
                 connections = connections.filter(c => c !== conn);
-                document.getElementById('roomStatus').innerHTML = `✅ 房主 | 当前成员数: ${connections.length}`;
+                document.getElementById('roomStatus').innerHTML = `房主 | 当前成员数: ${connections.length}`;
             });
-            // 连接成功后，把当前画布状态发给新成员
             conn.on('open', () => {
                 conn.send({ type: 'sync', canvasJSON: JSON.stringify(canvas.toJSON()) });
-                document.getElementById('roomStatus').innerHTML = `✅ 房主 | 当前成员数: ${connections.length}`;
+                document.getElementById('roomStatus').innerHTML = `房主 | 当前成员数: ${connections.length}`;
             });
         });
         peer.on('error', err => {
             console.error(err);
             if (err.type === 'peer-unavailable') {
-                document.getElementById('roomStatus').innerHTML = `❌ 房间名已被占用，请换一个名称`;
+                document.getElementById('roomStatus').innerHTML = `房间名已被占用，请换一个名称`;
             } else {
-                document.getElementById('roomStatus').innerHTML = `❌ 创建失败: ${err.message}`;
+                document.getElementById('roomStatus').innerHTML = `创建失败: ${err.message}`;
             }
             isHost = false;
         });
     }
 
-    // 成员加入 (连接到房主)
     function joinRoom(roomName) {
         if (peer) peer.destroy();
-        peer = new Peer();   // 随机ID
+        peer = new Peer();
         peer.on('open', id => {
             myId = id;
             isHost = false;
             const conn = peer.connect(roomName);
             hostConnection = conn;
             conn.on('open', () => {
-                document.getElementById('roomStatus').innerHTML = `✅ 已加入房间: ${roomName}`;
+                document.getElementById('roomStatus').innerHTML = `已加入房间: ${roomName}`;
             });
             conn.on('data', data => {
-                if (data.type === 'sync') {
-                    applySync(data.canvasJSON);
-                }
+                if (data.type === 'sync') applySync(data.canvasJSON);
             });
             conn.on('close', () => {
-                document.getElementById('roomStatus').innerHTML = `⚠️ 与房主断开，请刷新页面重新加入`;
+                document.getElementById('roomStatus').innerHTML = `与房主断开，请刷新页面重新加入`;
                 hostConnection = null;
             });
             conn.on('error', err => {
-                document.getElementById('roomStatus').innerHTML = `❌ 连接失败: ${err.message}`;
+                document.getElementById('roomStatus').innerHTML = `连接失败: ${err.message}`;
             });
         });
         peer.on('error', err => {
-            document.getElementById('roomStatus').innerHTML = `❌ 加入失败: ${err.message}`;
+            document.getElementById('roomStatus').innerHTML = `加入失败: ${err.message}`;
         });
     }
 
-    // 界面按钮
     document.getElementById('createRoomBtn').addEventListener('click', () => {
         const roomName = document.getElementById('roomNameInput').value.trim();
-        if (!roomName) {
-            alert('请输入房间名称');
-            return;
-        }
+        if (!roomName) { alert('请输入房间名称'); return; }
         createHost(roomName);
     });
     document.getElementById('joinRoomBtn').addEventListener('click', () => {
         const roomName = document.getElementById('roomNameInput').value.trim();
-        if (!roomName) {
-            alert('请输入房间名称');
-            return;
-        }
+        if (!roomName) { alert('请输入房间名称'); return; }
         joinRoom(roomName);
     });
 
@@ -349,7 +326,7 @@
     canvas.getObjects().forEach(obj => { if (!obj.selectable) canvas.sendToBack(obj); });
     canvas.selection = true;
 
-    // 历史记录（本地撤销，不参与同步，但多人状态下撤销后会自动同步）
+    // 历史记录
     let historyStack = [], historyIndex = -1;
     function saveHistory() {
         if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
@@ -365,7 +342,6 @@
             });
         }
     }
-    // 监听画布变化并同步
     function onCanvasChange() {
         saveHistory();
         sendCanvasUpdate();
@@ -374,7 +350,6 @@
     canvas.on('object:removed', onCanvasChange);
     canvas.on('object:modified', onCanvasChange);
 
-    // 清空画布
     function clearCanvas() {
         canvas.getObjects().forEach(obj => { if (obj.selectable !== false) canvas.remove(obj); });
         canvas.renderAll();
@@ -404,7 +379,7 @@
         }
     };
 
-    // 生成圆形 + 居中文字
+    // 圆形标记
     function createNamedCircle(left, top, name) {
         const circleRadius = 30;
         const circle = new fabric.Circle({
@@ -434,9 +409,41 @@
         });
     }
 
+    // ---------- 修复箭头绘制 ----------
+    function createArrowLine(fromX, fromY, toX, toY) {
+        const line = new fabric.Line([fromX, fromY, toX, toY], {
+            stroke: '#ffaa44',
+            strokeWidth: 3,
+            selectable: true,
+            hasControls: true,
+            hasBorders: true
+        });
+        // 计算角度（弧度转角度）
+        const angle = Math.atan2(toY - fromY, toX - fromX);
+        const arrowSize = 12;
+        // 箭头三角形放置在终点，但需要偏移一点点使尖端正好在线段终点，这里直接放在终点即可
+        const triangle = new fabric.Triangle({
+            left: toX,
+            top: toY,
+            originX: 'center',
+            originY: 'center',
+            width: arrowSize,
+            height: arrowSize,
+            fill: '#ffaa44',
+            angle: angle * 180 / Math.PI + 90   // 三角形默认指向右，旋转角度+90度使其指向线段方向
+        });
+        const group = new fabric.Group([line, triangle], {
+            selectable: true,
+            hasControls: true,
+            hasBorders: true
+        });
+        return group;
+    }
+
     // 工具管理
     let currentTool = 'select';
-    let lineStart = null, tempLine = null;
+    let lineStart = null;
+    let tempLine = null;
 
     function setTool(tool) {
         currentTool = tool;
@@ -483,7 +490,7 @@
             const p = canvas.getPointer(e.e);
             if (!lineStart) {
                 lineStart = p;
-                tempLine = new fabric.Line([p.x, p.y, p.x, p.y], { stroke: 'orange', strokeDashArray: [8,6], selectable: false });
+                tempLine = new fabric.Line([p.x, p.y, p.x, p.y], { stroke: 'orange', strokeDashArray: [8,6], selectable: false, evented: false });
                 canvas.add(tempLine);
             }
         }
@@ -501,19 +508,14 @@
         if (currentTool === 'line' && lineStart) {
             const end = canvas.getPointer(e.e);
             if (Math.hypot(end.x - lineStart.x, end.y - lineStart.y) > 5) {
-                const lineGroup = new fabric.Group([
-                    new fabric.Line([lineStart.x, lineStart.y, end.x, end.y], { stroke: '#ffaa44', strokeWidth: 3 }),
-                    new fabric.Triangle({
-                        left: end.x, top: end.y, width: 12, height: 12, fill: '#ffaa44',
-                        angle: Math.atan2(end.y - lineStart.y, end.x - lineStart.x) * 180 / Math.PI + 90
-                    })
-                ]);
-                canvas.add(lineGroup);
+                const arrowGroup = createArrowLine(lineStart.x, lineStart.y, end.x, end.y);
+                canvas.add(arrowGroup);
                 sendCanvasUpdate();
             }
             if (tempLine) canvas.remove(tempLine);
             lineStart = null;
             tempLine = null;
+            canvas.renderAll();
         }
     });
 
