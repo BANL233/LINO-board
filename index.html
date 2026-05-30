@@ -2,562 +2,576 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>R6战术板</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>LINO战术板</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
-        * { user-select: none; }
-        body {
-            margin: 0;
-            padding: 20px;
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body { overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        #tacticalCanvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background: #1a1d2f;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .floating-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .toggle-btn {
+            width: 56px;
+            height: 56px;
+            background: #ff8c00;
+            border-radius: 50%;
             display: flex;
-            justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-size: 28px;
+            color: white;
         }
-        .tactical-board {
-            display: flex;
-            gap: 20px;
-            background: #0f111a;
-            padding: 20px;
-            border-radius: 24px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            flex-wrap: wrap;
-        }
-        .sidebar {
-            width: 280px;
-            background: #1e243b;
+        .tools-panel {
+            position: absolute;
+            bottom: 70px;
+            right: 0;
+            width: 360px;
+            max-height: 70vh;
+            overflow-y: auto;
+            background: #1e243bdd;
+            backdrop-filter: blur(8px);
             border-radius: 20px;
             padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 16px;
+            border: 1px solid #4a5680;
         }
-        .sidebar h3 {
+        .tools-panel.collapsed { display: none; }
+        .section-title {
             color: #e5e9f0;
-            margin: 0 0 12px 0;
-            font-size: 1.1rem;
-            border-left: 4px solid #ff8c00;
-            padding-left: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-left: 3px solid #ff8c00;
+            padding-left: 8px;
         }
-        .tools {
+        .tools-row {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-        }
-        .tools button {
-            background: #2a324b;
-            border: none;
-            color: white;
-            padding: 8px 14px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.2s;
-        }
-        .tools button:hover, .active-tool {
-            background: #ff8c00 !important;
-        }
-        .file-ops {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .file-ops button, .file-ops label {
-            background: #2a324b;
-            border: none;
-            color: white;
-            padding: 8px;
-            border-radius: 30px;
-            text-align: center;
-            cursor: pointer;
-        }
-        .file-ops button:hover, .file-ops label:hover {
-            background: #ff8c00;
-        }
-        input[type="file"] { display: none; }
-        .canvas-container {
-            background: #1e1e2a;
-            border-radius: 20px;
-            box-shadow: 0 8px 20px black;
-        }
-        canvas {
-            border-radius: 16px;
-            display: block;
-            border: 2px solid #4a5680;
-        }
-        .status {
-            font-size: 12px;
-            color: #b9c3e6;
-            text-align: center;
-            background: #0b0e16;
-            padding: 6px;
-            border-radius: 50px;
-        }
-        .map-control {
-            display: flex;
             gap: 8px;
-            margin-top: 8px;
+            align-items: center;
         }
-        .map-control input {
-            flex: 1;
+        button, .operator-icon-btn {
             background: #2a324b;
             border: none;
             color: white;
-            padding: 6px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        button:hover, .operator-icon-btn:hover { background: #ff8c00; }
+        .active-tool { background: #ff8c00 !important; }
+        .operator-icon-btn {
+            width: 48px;
+            height: 48px;
+            padding: 4px;
+            border-radius: 12px;
+        }
+        .operator-icon-btn img {
+            max-width: 40px;
+            max-height: 40px;
+            pointer-events: none;
+        }
+        .operator-group-title {
+            color: #ffaa66;
+            font-size: 12px;
+            margin: 6px 0 4px 0;
         }
         .room-control {
-            background: #0b0e16;
-            border-radius: 16px;
-            padding: 12px;
+            background: #0b0e16aa;
+            border-radius: 12px;
+            padding: 8px;
             text-align: center;
         }
         .room-control input {
-            width: 80%;
+            width: 100%;
             padding: 6px;
-            margin: 6px 0;
             border-radius: 20px;
             border: none;
             text-align: center;
+            margin-bottom: 6px;
         }
-        .room-control button {
-            background: #ff8c00;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-weight: bold;
-            margin: 4px;
+        .status {
+            font-size: 11px;
+            color: #ccc;
+            text-align: center;
+            margin-top: 4px;
         }
-        button {
-            background: #ff8c00;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-weight: bold;
+        .warning {
+            color: #ffaa66;
+            background: #2a1e0e;
+            padding: 6px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-top: 8px;
         }
     </style>
 </head>
 <body>
-<div class="tactical-board">
-    <div class="sidebar">
-        <div class="room-control">
-            <h3>自定义房间</h3>
-            <input type="text" id="roomNameInput" placeholder="输入房间名称 (例如 clubhouse)">
-            <div>
-                <button id="createRoomBtn">创建房间 (房主)</button>
-                <button id="joinRoomBtn">加入房间</button>
-            </div>
-            <div id="roomStatus" class="status" style="margin-top:6px">未连接</div>
+<canvas id="tacticalCanvas"></canvas>
+
+<div class="floating-panel">
+    <div class="toggle-btn" id="togglePanelBtn">▲</div>
+    <div class="tools-panel" id="toolsPanel">
+        <div class="warning" id="corsWarning">
+            ⚠️ 检测到本地运行，请使用本地 HTTP 服务器，否则图片无法加载。<br>
+            → 教程：安装 Node.js 后，在文件夹打开终端输入 <code>npx http-server</code>，然后访问 <code>http://localhost:8080</code>
         </div>
+        <div class="room-control">
+            <input type="text" id="roomNameInput" placeholder="房间名 (如 r6team)">
+            <div style="display: flex; gap: 6px;">
+                <button id="createRoomBtn">房主</button>
+                <button id="joinRoomBtn">加入</button>
+            </div>
+            <div id="roomStatus" class="status">未连接</div>
+        </div>
+
         <div>
-            <h3>工具</h3>
-            <div class="tools" id="toolbar">
+            <div class="section-title">绘图工具</div>
+            <div class="tools-row" id="toolbar">
                 <button id="selectTool" class="active-tool">选择</button>
-                <button id="circleTool">添加圆形</button>
-                <button id="lineTool">画线</button>
+                <button id="penTool">画笔</button>
+                <button id="circleTool">圆形标记</button>
                 <button id="textTool">文字</button>
                 <button id="deleteTool">删除</button>
                 <button id="undoBtn">撤销</button>
-                <button id="clearBtn">清空画布</button>
+                <button id="clearBtn">清空</button>
             </div>
         </div>
-        <div>
-            <h3>地图</h3>
-            <div class="map-control">
-                <input type="text" id="mapUrlInput" placeholder="输入地图图片URL 或 上传">
-                <button id="loadMapBtn">加载地图</button>
-            </div>
-            <div class="map-control">
-                <label for="uploadMap">本地上传图片</label>
-                <input type="file" id="uploadMap" accept="image/jpeg,image/png,image/webp">
-            </div>
-        </div>
-        <div>
-            <h3>战术板管理</h3>
-            <div class="file-ops">
-                <button id="saveBtn">保存战术 (JSON)</button>
-                <label for="loadFile">加载战术文件</label>
-                <input type="file" id="loadFile" accept=".json">
-                <button id="exportImgBtn">导出为图片</button>
-            </div>
-        </div>
-    </div>
 
-    <div class="canvas-container">
-        <canvas id="tacticalCanvas" width="1000" height="600"></canvas>
+        <div id="penSettings" style="display: none;">
+            <div class="section-title">画笔样式</div>
+            <div class="tools-row">
+                <input type="color" id="penColor" value="#ffaa44">
+                <input type="range" id="penWidth" min="2" max="20" value="4">
+                <span id="penWidthValue" style="color:white;">4px</span>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-title">干员</div>
+            <div id="operatorListContainer"></div>
+        </div>
+
+        <div>
+            <div class="section-title">地图 & 视图</div>
+            <div class="tools-row">
+                <select id="builtinMapSelect" style="flex:1; background:#2a324b; color:white; border:none; padding:6px; border-radius:20px;">
+                    <option value="">-- 选择内置地图 --</option>
+                    <option value="images/clubhouse.jpg">俱乐部</option>
+                    <option value="images/chalet.jpg">木屋</option>
+                </select>
+                <button id="loadBuiltinMapBtn">加载</button>
+            </div>
+            <div class="tools-row">
+                <button id="resetViewBtn">重置视图</button>
+                <label for="uploadMap" style="background:#2a324b; padding:6px 12px; border-radius:30px;">本地上传</label>
+                <input type="file" id="uploadMap" accept="image/jpeg,image/png,image/webp" style="display:none;">
+            </div>
+            <div class="tools-row">
+                <input type="text" id="mapUrlInput" placeholder="或输入图片URL" style="flex:1;">
+                <button id="loadMapBtn">加载</button>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-title">战术板管理</div>
+            <div class="tools-row">
+                <button id="saveBtn">保存JSON</button>
+                <label for="loadFile" style="background:#2a324b; padding:6px 12px; border-radius:30px;">加载JSON</label>
+                <input type="file" id="loadFile" accept=".json" style="display:none;">
+                <button id="exportImgBtn">导出PNG</button>
+            </div>
+        </div>
+        <div class="status">💡 空格+拖拽 平移 | 滚轮缩放 | 点击干员图标后点击画布放置</div>
     </div>
 </div>
 
 <script>
-    // ---------- 多人同步 (PeerJS 房主模式) ----------
-    let peer = null;
-    let isHost = false;
-    let connections = [];
-    let hostConnection = null;
-    let myId = null;
-    let isSyncing = false;
-
-    function broadcastFullCanvas() {
-        if (!isHost) return;
-        if (isSyncing) return;
-        isSyncing = true;
-        const canvasJSON = JSON.stringify(canvas.toJSON());
-        for (let conn of connections) {
-            if (conn.open) conn.send({ type: 'sync', canvasJSON });
-        }
-        setTimeout(() => { isSyncing = false; }, 50);
-    }
-
-    function sendCanvasUpdate() {
-        if (isSyncing) return;
-        const canvasJSON = JSON.stringify(canvas.toJSON());
-        if (isHost) {
-            isSyncing = true;
-            for (let conn of connections) {
-                if (conn.open) conn.send({ type: 'sync', canvasJSON });
-            }
-            setTimeout(() => { isSyncing = false; }, 50);
+    (function() {
+        // 检测是否为本地 file 协议
+        if (window.location.protocol === 'file:') {
+            document.getElementById('corsWarning').style.display = 'block';
         } else {
-            if (hostConnection && hostConnection.open) {
-                hostConnection.send({ type: 'sync', canvasJSON });
-            }
+            document.getElementById('corsWarning').style.display = 'none';
         }
-    }
 
-    function applySync(canvasJSON) {
-        if (!isSyncing) {
-            isSyncing = true;
-            canvas.loadFromJSON(canvasJSON, () => {
-                canvas.renderAll();
-                isSyncing = false;
-            });
-        }
-    }
-
-    function createHost(roomName) {
-        if (peer) peer.destroy();
-        peer = new Peer(roomName);
-        peer.on('open', id => {
-            myId = id;
-            isHost = true;
-            document.getElementById('roomStatus').innerHTML = `房主模式，房间名: ${id} | 等待成员加入...`;
-        });
-        peer.on('connection', conn => {
-            connections.push(conn);
-            conn.on('data', data => {
-                if (data.type === 'sync') {
-                    for (let c of connections) {
-                        if (c !== conn && c.open) c.send(data);
-                    }
-                }
-            });
-            conn.on('close', () => {
-                connections = connections.filter(c => c !== conn);
-                document.getElementById('roomStatus').innerHTML = `房主 | 当前成员数: ${connections.length}`;
-            });
-            conn.on('open', () => {
-                conn.send({ type: 'sync', canvasJSON: JSON.stringify(canvas.toJSON()) });
-                document.getElementById('roomStatus').innerHTML = `房主 | 当前成员数: ${connections.length}`;
-            });
-        });
-        peer.on('error', err => {
-            console.error(err);
-            if (err.type === 'peer-unavailable') {
-                document.getElementById('roomStatus').innerHTML = `房间名已被占用，请换一个名称`;
+        // 折叠面板
+        const toggleBtn = document.getElementById('togglePanelBtn');
+        const toolsPanel = document.getElementById('toolsPanel');
+        let panelCollapsed = false;
+        toggleBtn.addEventListener('click', () => {
+            if (panelCollapsed) {
+                toolsPanel.classList.remove('collapsed');
+                toggleBtn.innerHTML = '▼';
             } else {
-                document.getElementById('roomStatus').innerHTML = `创建失败: ${err.message}`;
+                toolsPanel.classList.add('collapsed');
+                toggleBtn.innerHTML = '▲';
             }
-            isHost = false;
+            panelCollapsed = !panelCollapsed;
         });
-    }
 
-    function joinRoom(roomName) {
-        if (peer) peer.destroy();
-        peer = new Peer();
-        peer.on('open', id => {
-            myId = id;
-            isHost = false;
-            const conn = peer.connect(roomName);
-            hostConnection = conn;
-            conn.on('open', () => {
-                document.getElementById('roomStatus').innerHTML = `已加入房间: ${roomName}`;
-            });
-            conn.on('data', data => {
-                if (data.type === 'sync') applySync(data.canvasJSON);
-            });
-            conn.on('close', () => {
-                document.getElementById('roomStatus').innerHTML = `与房主断开，请刷新页面重新加入`;
-                hostConnection = null;
-            });
-            conn.on('error', err => {
-                document.getElementById('roomStatus').innerHTML = `连接失败: ${err.message}`;
-            });
-        });
-        peer.on('error', err => {
-            document.getElementById('roomStatus').innerHTML = `加入失败: ${err.message}`;
-        });
-    }
-
-    document.getElementById('createRoomBtn').addEventListener('click', () => {
-        const roomName = document.getElementById('roomNameInput').value.trim();
-        if (!roomName) { alert('请输入房间名称'); return; }
-        createHost(roomName);
-    });
-    document.getElementById('joinRoomBtn').addEventListener('click', () => {
-        const roomName = document.getElementById('roomNameInput').value.trim();
-        if (!roomName) { alert('请输入房间名称'); return; }
-        joinRoom(roomName);
-    });
-
-    // ---------- Fabric 画布初始化 ----------
-    const canvas = new fabric.Canvas('tacticalCanvas');
-    canvas.setBackgroundColor('#24273a', canvas.renderAll.bind(canvas));
-    // 网格背景
-    const gridSize = 40;
-    for (let i = 0; i < canvas.width; i += gridSize) {
-        canvas.add(new fabric.Line([i, 0, i, canvas.height], { stroke: '#3b4270', strokeWidth: 0.8, selectable: false, evented: false }));
-        canvas.add(new fabric.Line([0, i, canvas.width, i], { stroke: '#3b4270', strokeWidth: 0.8, selectable: false, evented: false }));
-    }
-    canvas.getObjects().forEach(obj => { if (!obj.selectable) canvas.sendToBack(obj); });
-    canvas.selection = true;
-
-    // 历史记录
-    let historyStack = [], historyIndex = -1;
-    function saveHistory() {
-        if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
-        historyStack.push(JSON.stringify(canvas.toJSON()));
-        historyIndex = historyStack.length - 1;
-    }
-    function undo() {
-        if (historyIndex > 0) {
-            historyIndex--;
-            canvas.loadFromJSON(historyStack[historyIndex], () => {
-                canvas.renderAll();
-                sendCanvasUpdate();
-            });
-        }
-    }
-    function onCanvasChange() {
-        saveHistory();
-        sendCanvasUpdate();
-    }
-    canvas.on('object:added', onCanvasChange);
-    canvas.on('object:removed', onCanvasChange);
-    canvas.on('object:modified', onCanvasChange);
-
-    function clearCanvas() {
-        canvas.getObjects().forEach(obj => { if (obj.selectable !== false) canvas.remove(obj); });
-        canvas.renderAll();
-        sendCanvasUpdate();
-    }
-    document.getElementById('clearBtn').onclick = () => { if(confirm('清空所有标记？')) clearCanvas(); };
-    document.getElementById('undoBtn').onclick = () => undo();
-
-    // 地图加载
-    function setMapBackground(imgUrl) {
-        fabric.Image.fromURL(imgUrl, img => {
-            img.set({ scaleX: canvas.width / img.width, scaleY: canvas.height / img.height, selectable: false, evented: false });
-            canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
-            sendCanvasUpdate();
-        });
-    }
-    document.getElementById('loadMapBtn').onclick = () => {
-        const url = document.getElementById('mapUrlInput').value;
-        if(url) setMapBackground(url);
-    };
-    document.getElementById('uploadMap').onchange = e => {
-        const file = e.target.files[0];
-        if(file) {
-            const reader = new FileReader();
-            reader.onload = ev => setMapBackground(ev.target.result);
-            reader.readAsDataURL(file);
-        }
-    };
-
-    // 圆形标记
-    function createNamedCircle(left, top, name) {
-        const circleRadius = 30;
-        const circle = new fabric.Circle({
-            radius: circleRadius,
-            fill: '#3a6ea5',
-            stroke: '#ffffff',
-            strokeWidth: 2,
-            originX: 'center',
-            originY: 'center',
-            hasControls: true,
-            hasBorders: true
-        });
-        const text = new fabric.Text(name, {
-            fontSize: 14,
-            fill: 'white',
-            fontWeight: 'bold',
-            originX: 'center',
-            originY: 'center',
-            fontFamily: 'Arial'
-        });
-        return new fabric.Group([circle, text], {
-            left, top,
-            originX: 'center',
-            originY: 'center',
-            hasControls: true,
-            hasBorders: true
-        });
-    }
-
-    // ---------- 修复箭头绘制 ----------
-    function createArrowLine(fromX, fromY, toX, toY) {
-        const line = new fabric.Line([fromX, fromY, toX, toY], {
-            stroke: '#ffaa44',
-            strokeWidth: 3,
-            selectable: true,
-            hasControls: true,
-            hasBorders: true
-        });
-        // 计算角度（弧度转角度）
-        const angle = Math.atan2(toY - fromY, toX - fromX);
-        const arrowSize = 12;
-        // 箭头三角形放置在终点，但需要偏移一点点使尖端正好在线段终点，这里直接放在终点即可
-        const triangle = new fabric.Triangle({
-            left: toX,
-            top: toY,
-            originX: 'center',
-            originY: 'center',
-            width: arrowSize,
-            height: arrowSize,
-            fill: '#ffaa44',
-            angle: angle * 180 / Math.PI + 90   // 三角形默认指向右，旋转角度+90度使其指向线段方向
-        });
-        const group = new fabric.Group([line, triangle], {
-            selectable: true,
-            hasControls: true,
-            hasBorders: true
-        });
-        return group;
-    }
-
-    // 工具管理
-    let currentTool = 'select';
-    let lineStart = null;
-    let tempLine = null;
-
-    function setTool(tool) {
-        currentTool = tool;
-        if (lineStart) {
-            if (tempLine) canvas.remove(tempLine);
-            lineStart = null;
-            tempLine = null;
-        }
-        document.querySelectorAll('#toolbar button').forEach(btn => btn.classList.remove('active-tool'));
-        if (tool === 'select') document.getElementById('selectTool').classList.add('active-tool');
-        if (tool === 'circle') document.getElementById('circleTool').classList.add('active-tool');
-        if (tool === 'line') document.getElementById('lineTool').classList.add('active-tool');
-        if (tool === 'text') document.getElementById('textTool').classList.add('active-tool');
-        if (tool === 'delete') document.getElementById('deleteTool').classList.add('active-tool');
-    }
-
-    function addCircleAt(pointer) {
-        const name = prompt('输入标记名称（将显示在圆内）:', '队员');
-        if (name && name.trim() !== '') {
-            canvas.add(createNamedCircle(pointer.x, pointer.y, name.trim()));
+        // 全屏画布
+        const canvas = new fabric.Canvas('tacticalCanvas');
+        function resizeCanvas() {
+            canvas.setDimensions({ width: window.innerWidth, height: window.innerHeight });
             canvas.renderAll();
-            sendCanvasUpdate();
         }
-    }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        canvas.setBackgroundColor('#1a1d2f', canvas.renderAll.bind(canvas));
 
-    canvas.on('mouse:down', (e) => {
-        if (currentTool === 'delete' && e.target) {
-            canvas.remove(e.target);
-            sendCanvasUpdate();
+        // 缩放平移
+        let zoom = 1;
+        let panning = false;
+        let lastPos = { x: 0, y: 0 };
+        let isSpaceDown = false;
+        canvas.on('mouse:wheel', (opt) => {
+            const delta = opt.e.deltaY > 0 ? 0.9 : 1.1;
+            zoom *= delta;
+            zoom = Math.min(Math.max(zoom, 0.2), 5);
+            canvas.setZoom(zoom);
+            opt.e.preventDefault();
+            canvas.renderAll();
+        });
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') { isSpaceDown = true; canvas.defaultCursor = 'grab'; e.preventDefault(); }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') { isSpaceDown = false; canvas.defaultCursor = 'default'; e.preventDefault(); }
+        });
+        canvas.on('mouse:down', (opt) => {
+            if (isSpaceDown) {
+                panning = true;
+                lastPos = canvas.getPointer(opt.e);
+                canvas.selection = false;
+                canvas.defaultCursor = 'grabbing';
+                opt.e.preventDefault();
+            }
+        });
+        canvas.on('mouse:move', (opt) => {
+            if (panning && isSpaceDown) {
+                const cur = canvas.getPointer(opt.e);
+                canvas.relativePan({ x: cur.x - lastPos.x, y: cur.y - lastPos.y });
+                lastPos = cur;
+                canvas.renderAll();
+                opt.e.preventDefault();
+            }
+        });
+        canvas.on('mouse:up', () => {
+            panning = false;
+            canvas.selection = (currentTool === 'select');
+            canvas.defaultCursor = isSpaceDown ? 'grab' : 'default';
+        });
+        document.getElementById('resetViewBtn').addEventListener('click', () => {
+            zoom = 1;
+            canvas.setZoom(1);
+            canvas.absolutePan({ x: 0, y: 0 });
+            canvas.renderAll();
+        });
+
+        // 多人同步（简化版，但保证不报错）
+        let peer = null, isHost = false, connections = [], hostConnection = null, isSyncing = false;
+        function sendCanvasUpdate() {
+            if (isSyncing) return;
+            const canvasJSON = JSON.stringify(canvas.toJSON());
+            if (isHost) {
+                isSyncing = true;
+                for (let conn of connections) if (conn.open) conn.send({ type: 'sync', canvasJSON });
+                setTimeout(() => { isSyncing = false; }, 50);
+            } else {
+                if (hostConnection && hostConnection.open) hostConnection.send({ type: 'sync', canvasJSON });
+            }
         }
-        else if (currentTool === 'text' && !e.target) {
-            const p = canvas.getPointer(e.e);
+        function applySync(canvasJSON) {
+            if (!isSyncing) {
+                isSyncing = true;
+                canvas.loadFromJSON(canvasJSON, () => { canvas.renderAll(); isSyncing = false; });
+            }
+        }
+        function createHost(roomName) {
+            if (peer) peer.destroy();
+            peer = new Peer(roomName);
+            peer.on('open', id => { isHost = true; document.getElementById('roomStatus').innerHTML = `房主: ${id}`; });
+            peer.on('connection', conn => {
+                connections.push(conn);
+                conn.on('data', data => { if (data.type === 'sync') for (let c of connections) if (c !== conn && c.open) c.send(data); });
+                conn.on('open', () => { conn.send({ type: 'sync', canvasJSON: JSON.stringify(canvas.toJSON()) }); document.getElementById('roomStatus').innerHTML = `房主 | 成员: ${connections.length}`; });
+                conn.on('close', () => { connections = connections.filter(c => c !== conn); document.getElementById('roomStatus').innerHTML = `房主 | 成员: ${connections.length}`; });
+            });
+            peer.on('error', err => { document.getElementById('roomStatus').innerHTML = `创建失败: ${err.message}`; isHost = false; });
+        }
+        function joinRoom(roomName) {
+            if (peer) peer.destroy();
+            peer = new Peer();
+            peer.on('open', id => {
+                const conn = peer.connect(roomName);
+                hostConnection = conn;
+                conn.on('open', () => { document.getElementById('roomStatus').innerHTML = `已加入 ${roomName}`; });
+                conn.on('data', data => { if (data.type === 'sync') applySync(data.canvasJSON); });
+                conn.on('close', () => { document.getElementById('roomStatus').innerHTML = `断开，请刷新重连`; hostConnection = null; });
+                conn.on('error', err => { document.getElementById('roomStatus').innerHTML = `连接失败: ${err.message}`; });
+            });
+            peer.on('error', err => { document.getElementById('roomStatus').innerHTML = `加入失败: ${err.message}`; });
+        }
+        document.getElementById('createRoomBtn').onclick = () => { const name = document.getElementById('roomNameInput').value.trim(); if(name) createHost(name); else alert('输入房间名'); };
+        document.getElementById('joinRoomBtn').onclick = () => { const name = document.getElementById('roomNameInput').value.trim(); if(name) joinRoom(name); else alert('输入房间名'); };
+
+        // 撤销历史
+        let historyStack = [], historyIndex = -1;
+        function saveHistory() {
+            if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
+            historyStack.push(JSON.stringify(canvas.toJSON()));
+            historyIndex = historyStack.length - 1;
+            if (historyStack.length > 50) historyStack.shift();
+        }
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                canvas.loadFromJSON(historyStack[historyIndex], () => canvas.renderAll());
+                sendCanvasUpdate();
+            }
+        }
+        document.getElementById('undoBtn').onclick = () => undo();
+        window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); } });
+        function onCanvasChange() { saveHistory(); sendCanvasUpdate(); }
+        canvas.on('object:added', onCanvasChange);
+        canvas.on('object:removed', onCanvasChange);
+        canvas.on('object:modified', onCanvasChange);
+
+        // 工具
+        let currentTool = 'select';
+        let placingOperator = null;
+        const brush = new fabric.PencilBrush(canvas);
+        brush.width = 4; brush.color = '#ffaa44';
+
+        function setTool(tool) {
+            currentTool = tool;
+            if (placingOperator) {
+                placingOperator = null;
+                document.querySelectorAll('.operator-icon-btn').forEach(btn => btn.classList.remove('active-tool'));
+                canvas.defaultCursor = 'default';
+            }
+            canvas.isDrawingMode = false;
+            canvas.selection = (tool === 'select');
+            if (tool === 'pen') {
+                canvas.isDrawingMode = true;
+                canvas.freeDrawingBrush = brush;
+                canvas.freeDrawingBrush.color = document.getElementById('penColor').value;
+                canvas.freeDrawingBrush.width = parseInt(document.getElementById('penWidth').value);
+            }
+            document.querySelectorAll('#toolbar button').forEach(btn => btn.classList.remove('active-tool'));
+            const activeBtn = document.getElementById(`${tool}Tool`);
+            if (activeBtn) activeBtn.classList.add('active-tool');
+            document.getElementById('penSettings').style.display = tool === 'pen' ? 'block' : 'none';
+        }
+        document.getElementById('penColor').addEventListener('change', (e) => {
+            brush.color = e.target.value;
+            if (currentTool === 'pen') canvas.freeDrawingBrush.color = e.target.value;
+        });
+        document.getElementById('penWidth').addEventListener('input', (e) => {
+            let w = parseInt(e.target.value);
+            brush.width = w;
+            if (currentTool === 'pen') canvas.freeDrawingBrush.width = w;
+            document.getElementById('penWidthValue').innerText = w + 'px';
+        });
+
+        function createNamedCircle(left, top, name) {
+            const circle = new fabric.Circle({ radius: 30, fill: '#3a6ea5', stroke: '#fff', strokeWidth: 2, originX: 'center', originY: 'center' });
+            const text = new fabric.Text(name, { fontSize: 14, fill: 'white', fontWeight: 'bold', originX: 'center', originY: 'center' });
+            return new fabric.Group([circle, text], { left, top, originX: 'center', originY: 'center', hasControls: true });
+        }
+        function addTextAt(pointer) {
             const txt = prompt('战术标注文字:');
             if (txt) {
-                canvas.add(new fabric.IText(txt, { left: p.x, top: p.y, fontSize: 18, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.6)' }));
+                canvas.add(new fabric.IText(txt, { left: pointer.x, top: pointer.y, fontSize: 18, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.6)' }));
+                canvas.renderAll();
                 sendCanvasUpdate();
             }
         }
-        else if (currentTool === 'circle' && !e.target) {
-            const p = canvas.getPointer(e.e);
-            addCircleAt(p);
-        }
-        else if (currentTool === 'line' && !e.target) {
-            const p = canvas.getPointer(e.e);
-            if (!lineStart) {
-                lineStart = p;
-                tempLine = new fabric.Line([p.x, p.y, p.x, p.y], { stroke: 'orange', strokeDashArray: [8,6], selectable: false, evented: false });
-                canvas.add(tempLine);
-            }
-        }
-    });
-
-    canvas.on('mouse:move', (e) => {
-        if (currentTool === 'line' && lineStart && tempLine) {
-            const p = canvas.getPointer(e.e);
-            tempLine.set({ x2: p.x, y2: p.y });
+        function clearCanvas() {
+            canvas.getObjects().forEach(obj => canvas.remove(obj));
             canvas.renderAll();
+            sendCanvasUpdate();
         }
-    });
 
-    canvas.on('mouse:up', (e) => {
-        if (currentTool === 'line' && lineStart) {
-            const end = canvas.getPointer(e.e);
-            if (Math.hypot(end.x - lineStart.x, end.y - lineStart.y) > 5) {
-                const arrowGroup = createArrowLine(lineStart.x, lineStart.y, end.x, end.y);
-                canvas.add(arrowGroup);
-                sendCanvasUpdate();
-            }
-            if (tempLine) canvas.remove(tempLine);
-            lineStart = null;
-            tempLine = null;
-            canvas.renderAll();
-        }
-    });
+        // 干员列表
+        const attackers = ["ash","thermite","thatcher","montagne","twitch","glaz","fuze","blitz","iq","buck","blackbeard","capitao","hibana","jackal","ying","zofia","dokkaebi","lion","finka","maverick","nomad","gridlock","nokk","amaru","kali","iana","ace","zero","flores","osa","sens","grim","brava","ram","deimos","rauora","snake"];
+        const defenders = ["smoke","mute","castle","pulse","doc","rook","jager","bandit","frost","valkyrie","caveira","echo","mira","lesion","ela","vigil","alibi","maestro","clash","kaid","mozzie","warden","goyo","wamai","oryx","melusi","aruni","thunderbird","thorn","azami","solis","fenrir","tubarao","skopos","denari"];
 
-    document.getElementById('selectTool').onclick = () => setTool('select');
-    document.getElementById('circleTool').onclick = () => setTool('circle');
-    document.getElementById('lineTool').onclick = () => setTool('line');
-    document.getElementById('textTool').onclick = () => setTool('text');
-    document.getElementById('deleteTool').onclick = () => setTool('delete');
-
-    // 保存/加载/导出
-    document.getElementById('saveBtn').onclick = () => {
-        const data = JSON.stringify(canvas.toJSON());
-        const blob = new Blob([data], {type:'application/json'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'tactical.json';
-        a.click();
-    };
-    document.getElementById('loadFile').onchange = e => {
-        const file = e.target.files[0];
-        if(file) {
-            const reader = new FileReader();
-            reader.onload = ev => {
-                canvas.loadFromJSON(ev.target.result, () => {
-                    canvas.renderAll();
-                    sendCanvasUpdate();
+        function buildOperatorButtons() {
+            let html = `<div class="operator-group"><div class="operator-group-title">🔴 进攻方</div><div class="tools-row">`;
+            attackers.forEach(op => {
+                html += `<button class="operator-icon-btn" data-operator="${op}"><img src="images/${op}.png" alt="${op}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'40\' height=\'40\' viewBox=\'0 0 24 24\' fill=\'%23ff8c00\'%3E%3Ccircle cx=\'12\' cy=\'12\' r=\'10\'/%3E%3C/svg%3E'"></button>`;
+            });
+            html += `</div></div><div class="operator-group"><div class="operator-group-title">🔵 防守方</div><div class="tools-row">`;
+            defenders.forEach(op => {
+                html += `<button class="operator-icon-btn" data-operator="${op}"><img src="images/${op}.png" alt="${op}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'40\' height=\'40\' viewBox=\'0 0 24 24\' fill=\'%23ff8c00\'%3E%3Ccircle cx=\'12\' cy=\'12\' r=\'10\'/%3E%3C/svg%3E'"></button>`;
+            });
+            html += `</div></div>`;
+            document.getElementById('operatorListContainer').innerHTML = html;
+            document.querySelectorAll('.operator-icon-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.operator-icon-btn').forEach(b => b.classList.remove('active-tool'));
+                    btn.classList.add('active-tool');
+                    placingOperator = btn.getAttribute('data-operator');
+                    canvas.defaultCursor = 'crosshair';
+                    document.getElementById('roomStatus').innerHTML = `点击画布放置 ${placingOperator}`;
                 });
-            };
-            reader.readAsText(file);
+            });
         }
-    };
-    document.getElementById('exportImgBtn').onclick = () => {
-        const link = document.createElement('a');
-        link.download = 'tactical.png';
-        link.href = canvas.toDataURL();
-        link.click();
-    };
+        buildOperatorButtons();
 
-    // 添加两个示例圆形
-    canvas.add(createNamedCircle(200, 200, 'A点'));
-    canvas.add(createNamedCircle(450, 350, 'B点'));
-    saveHistory();
+        // 安全的图片加载函数（带错误处理，兼容 file 协议）
+        function loadImageSafe(url, callback, errorCallback) {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.onload = () => callback(img);
+            img.onerror = (err) => {
+                console.warn('图片加载失败:', url, err);
+                if (errorCallback) errorCallback(err);
+            };
+            img.src = url;
+        }
+
+        function placeOperator(pointer, operatorId) {
+            const imgPath = `images/${operatorId}.png`;
+            loadImageSafe(imgPath, (imgEl) => {
+                const fImg = new fabric.Image(imgEl);
+                fImg.set({ left: pointer.x - 25, top: pointer.y - 25, scaleX: 0.5, scaleY: 0.5, hasControls: true, hasBorders: true });
+                canvas.add(fImg);
+                canvas.renderAll();
+                sendCanvasUpdate();
+            }, () => {
+                // 后备圆形
+                const fallback = createNamedCircle(pointer.x, pointer.y, operatorId);
+                canvas.add(fallback);
+                canvas.renderAll();
+                sendCanvasUpdate();
+            });
+        }
+
+        function loadMapFromPath(path) {
+            loadImageSafe(path, (imgEl) => {
+                const fImg = new fabric.Image(imgEl);
+                fImg.set({ scaleX: canvas.width / imgEl.width, scaleY: canvas.height / imgEl.height, selectable: false, evented: false });
+                canvas.setBackgroundImage(fImg, canvas.renderAll.bind(canvas));
+                sendCanvasUpdate();
+            }, () => {
+                console.warn('地图加载失败，保持原有背景');
+                canvas.setBackgroundColor('#1a1d2f', canvas.renderAll.bind(canvas));
+                sendCanvasUpdate();
+            });
+        }
+
+        // 绑定地图控件
+        document.getElementById('loadBuiltinMapBtn').addEventListener('click', () => {
+            const select = document.getElementById('builtinMapSelect');
+            if (select.value) loadMapFromPath(select.value);
+            else alert('请选择地图');
+        });
+        document.getElementById('loadMapBtn').addEventListener('click', () => {
+            const url = document.getElementById('mapUrlInput').value.trim();
+            if (url) loadMapFromPath(url);
+        });
+        document.getElementById('uploadMap').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = ev => loadMapFromPath(ev.target.result);
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 保存导出
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            const json = JSON.stringify(canvas.toJSON());
+            const blob = new Blob([json], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'tactical.json';
+            a.click();
+        });
+        document.getElementById('loadFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    canvas.loadFromJSON(ev.target.result, () => canvas.renderAll());
+                    sendCanvasUpdate();
+                };
+                reader.readAsText(file);
+            }
+        });
+        document.getElementById('exportImgBtn').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'tactical.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+
+        // 绑定工具按钮
+        document.getElementById('selectTool').onclick = () => setTool('select');
+        document.getElementById('penTool').onclick = () => setTool('pen');
+        document.getElementById('circleTool').onclick = () => setTool('circle');
+        document.getElementById('textTool').onclick = () => setTool('text');
+        document.getElementById('deleteTool').onclick = () => setTool('delete');
+        document.getElementById('clearBtn').onclick = () => { if (confirm('清空所有标记？')) clearCanvas(); };
+
+        // 鼠标事件整合
+        canvas.on('mouse:down', (opt) => {
+            if (isSpaceDown) return;
+            if (placingOperator && !opt.target) {
+                const p = canvas.getPointer(opt.e);
+                placeOperator(p, placingOperator);
+                placingOperator = null;
+                document.querySelectorAll('.operator-icon-btn').forEach(b => b.classList.remove('active-tool'));
+                canvas.defaultCursor = 'default';
+                document.getElementById('roomStatus').innerHTML = '干员已放置';
+                return;
+            }
+            if (currentTool === 'circle' && !opt.target) {
+                const p = canvas.getPointer(opt.e);
+                const name = prompt('输入标记名称:', '点');
+                if (name) canvas.add(createNamedCircle(p.x, p.y, name));
+                canvas.renderAll();
+                sendCanvasUpdate();
+            } else if (currentTool === 'text' && !opt.target) {
+                addTextAt(canvas.getPointer(opt.e));
+            } else if (currentTool === 'delete' && opt.target) {
+                canvas.remove(opt.target);
+                canvas.renderAll();
+                sendCanvasUpdate();
+            }
+        });
+
+        // 尝试加载默认地图（若图片不存在则静默失败）
+        loadMapFromPath('images/clubhouse.jpg');
+        // 添加示例圆形
+        canvas.add(createNamedCircle(200, 200, 'A点'));
+        canvas.add(createNamedCircle(500, 300, 'B点'));
+        setTool('select');
+        saveHistory();
+    })();
 </script>
 </body>
 </html>
