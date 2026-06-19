@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="images/icon-192.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>LINO战术板</title>
@@ -125,6 +127,13 @@
         }
     </style>
 </head>
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js')
+            .then(() => console.log('SW 注册成功'))
+            .catch(err => console.warn('SW 注册失败', err));
+    }
+</script>
 <body>
 <canvas id="tacticalCanvas"></canvas>
 
