@@ -135,6 +135,24 @@
     }
 </script>
 <body>
+    <button id="installBtn" style="position:fixed; bottom:100px; right:20px; z-index:9999; background:#ff8c00; border:none; padding:10px 20px; border-radius:30px; color:#fff; font-weight:bold; cursor:pointer;">📲 安装应用</button>
+<script>
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('installBtn').style.display = 'block';
+    });
+    document.getElementById('installBtn').addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const result = await deferredPrompt.userChoice;
+            console.log('用户选择:', result.outcome);
+            deferredPrompt = null;
+            document.getElementById('installBtn').style.display = 'none';
+        }
+    });
+</script>
 <canvas id="tacticalCanvas"></canvas>
 
 <div class="floating-panel">
