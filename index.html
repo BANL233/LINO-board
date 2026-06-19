@@ -484,17 +484,15 @@
         }
 
         function loadMapFromPath(path) {
-            loadImageSafe(path, (imgEl) => {
-                const fImg = new fabric.Image(imgEl);
-                fImg.set({ scaleX: canvas.width / imgEl.width, scaleY: canvas.height / imgEl.height, selectable: false, evented: false });
-                canvas.setBackgroundImage(fImg, canvas.renderAll.bind(canvas));
-                sendCanvasUpdate();
-            }, () => {
-                console.warn('地图加载失败，保持原有背景');
-                canvas.setBackgroundColor('#1a1d2f', canvas.renderAll.bind(canvas));
-                sendCanvasUpdate();
-            });
-        }
+    document.getElementById('roomStatus').innerHTML = '⏳ 地图加载中...';
+    loadImageSafe(path, (imgEl) => {
+        // ... 加载成功
+        document.getElementById('roomStatus').innerHTML = '✅ 地图已加载';
+    }, () => {
+        // 失败
+        document.getElementById('roomStatus').innerHTML = '❌ 地图加载失败';
+    });
+}
 
         // 绑定地图控件
         document.getElementById('loadBuiltinMapBtn').addEventListener('click', () => {
