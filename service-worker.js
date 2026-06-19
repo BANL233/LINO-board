@@ -1,12 +1,10 @@
-const CACHE_NAME = 'lino-tactical-v1';
+const CACHE_NAME = 'lino-tactical-v2';  // 更新版本号
 const urlsToCache = [
     'index.html',
-    'images/BANK.png',      // 默认地图
-    'images/ash.png',       // 至少缓存常用干员图标（可选）
-    // 你也可以不缓存所有干员，按需加载
+    'images/BANK.png',
+    // 不需要再列出所有图标，改为运行时缓存
 ];
 
-// 安装时缓存核心资源
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -14,12 +12,35 @@ self.addEventListener('install', event => {
     );
 });
 
-// 拦截请求，优先从缓存返回
 self.addEventListener('fetch', event => {
-    event.respondWith(
-        caches.match(event.request)
-            .then(response => response || fetch(event.request))
-    );
+    const url = new URL(event.request.url);
+    // 如果是干员图标请求（images/ 下 .png），采用“缓存优先”策略
+    if (url.pathname.startsWith('/images/') && url.pathname.endsWith('.png')) {
+        event.respondWith(
+            caches.match(event.request).then(cachedResponse => {
+                if (cachedResponse) {
+                    return cachedResponse; // 缓存命中
+                }
+                // 否则请求并缓存
+                return fetch(event.request).then(response => {
+                    // 注意：只缓存成功响应
+                    if (response && response.status === 200) {
+                        const cloned = response.clone();
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(event.request, cloned);
+                        });
+                    }
+                    return response;
+                });
+            })
+        );
+    } else {
+        // 其他资源（包括地图）使用“缓存优先，回退到网络”策略
+        event.respondWith(
+            caches.match(event.request)
+                .then(response => response || fetch(event.request))
+        );
+    }
 });
 
 // 清理旧缓存
