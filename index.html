@@ -238,13 +238,12 @@
         resizeCanvas();
         canvas.setBackgroundColor('#1a1d2f', canvas.renderAll.bind(canvas));
 
-        // ---------- 修改开始：平移逻辑改为选择工具下拖拽空白区域 ----------
+        // ---------- 平移逻辑 ----------
         let zoom = 1;
         let panning = false;
         let lastPos = { x: 0, y: 0 };
 
-        // 移除空格键监听，不再需要
-        // 滚轮缩放保留
+        // 滚轮缩放
         canvas.on('mouse:wheel', (opt) => {
             const delta = opt.e.deltaY > 0 ? 0.9 : 1.1;
             zoom *= delta;
@@ -253,45 +252,6 @@
             opt.e.preventDefault();
             canvas.renderAll();
         });
-
-        // 鼠标按下
-        canvas.on('mouse:down', (opt) => {
-            // 只有当前工具是 'select' 且点击空白区域（没有目标对象）才进入平移模式
-            if (currentTool === 'select' && !opt.target) {
-                panning = true;
-                lastPos = canvas.getPointer(opt.e);
-                canvas.selection = false;      // 临时禁用选择
-                canvas.defaultCursor = 'grab';
-                opt.e.preventDefault();
-                return; // 阻止后续处理（避免干扰放置干员等）
-            }
-            // 其他情况（点击对象或非选择工具）正常处理，交给后续逻辑
-        });
-
-        // 鼠标移动
-        canvas.on('mouse:move', (opt) => {
-            if (panning) {
-                const cur = canvas.getPointer(opt.e);
-                canvas.relativePan({ x: cur.x - lastPos.x, y: cur.y - lastPos.y });
-                lastPos = cur;
-                canvas.renderAll();
-                opt.e.preventDefault();
-            }
-        });
-
-        // 鼠标松开
-        canvas.on('mouse:up', () => {
-            if (panning) {
-                panning = false;
-                canvas.selection = true;       // 恢复选择能力（仅在选择工具时有效，由setTool控制）
-                canvas.defaultCursor = 'default';
-                // 确保选择工具时 selection 状态正确
-                if (currentTool === 'select') {
-                    canvas.selection = false;   // 我们已禁用多选，所以这里设为 false
-                }
-            }
-        });
-        // ---------- 修改结束 ----------
 
         // 重置视图
         document.getElementById('resetViewBtn').addEventListener('click', () => {
@@ -384,8 +344,7 @@
                 canvas.defaultCursor = 'default';
             }
             canvas.isDrawingMode = false;
-            // 选择工具时禁用多选框选，但允许单击选中
-            canvas.selection = false;   // 始终禁用多选，确保单选
+            canvas.selection = false;   // 始终禁用多选
             if (tool === 'pen') {
                 canvas.isDrawingMode = true;
                 canvas.freeDrawingBrush = brush;
@@ -483,26 +442,25 @@
             });
         }
 
- function loadMapFromPath(path) {
-    document.getElementById('roomStatus').innerHTML = '⏳ 地图加载中...';
-    loadImageSafe(path, (imgEl) => {
-        // 加载成功：将图片设置为画布背景
-        const fImg = new fabric.Image(imgEl);
-        fImg.set({
-            scaleX: canvas.width / imgEl.width,
-            scaleY: canvas.height / imgEl.height,
-            selectable: false,
-            evented: false
-        });
-        canvas.setBackgroundImage(fImg, canvas.renderAll.bind(canvas));
-        sendCanvasUpdate();
-        document.getElementById('roomStatus').innerHTML = '✅ 地图已加载';
-    }, () => {
-        // 加载失败
-        document.getElementById('roomStatus').innerHTML = '❌ 地图加载失败，保持原有背景';
-        console.warn('地图加载失败:', path);
-    });
-}
+        function loadMapFromPath(path) {
+            document.getElementById('roomStatus').innerHTML = '⏳ 地图加载中...';
+            loadImageSafe(path, (imgEl) => {
+                const fImg = new fabric.Image(imgEl);
+                fImg.set({
+                    scaleX: canvas.width / imgEl.width,
+                    scaleY: canvas.height / imgEl.height,
+                    selectable: false,
+                    evented: false
+                });
+                canvas.setBackgroundImage(fImg, canvas.renderAll.bind(canvas));
+                sendCanvasUpdate();
+                document.getElementById('roomStatus').innerHTML = '✅ 地图已加载';
+            }, () => {
+                document.getElementById('roomStatus').innerHTML = '❌ 地图加载失败，保持原有背景';
+                console.warn('地图加载失败:', path);
+            });
+        }
+
         // 绑定地图控件
         document.getElementById('loadBuiltinMapBtn').addEventListener('click', () => {
             const select = document.getElementById('builtinMapSelect');
@@ -557,15 +515,9 @@
         document.getElementById('deleteTool').onclick = () => setTool('delete');
         document.getElementById('clearBtn').onclick = () => { if (confirm('清空所有标记？')) clearCanvas(); };
 
-        // 鼠标事件整合（干员放置、圆形、文字、删除等）
+        // ---------- 核心修复：统一 mouse:down 处理，优先干员放置 ----------
         canvas.on('mouse:down', (opt) => {
-            // 如果正在平移，不处理其他操作（已经在前面 return 了）
-            // 但平移逻辑在之前的 mouse:down 中已经处理并 return，所以这里不会重复
-            // 注意：之前的 mouse:down 中如果进入平移模式会 return，所以下面的代码不会执行
-            // 但为了保险，这里再加一个检查
-            if (panning) return;
-
-            // 干员放置
+            // 1. 干员放置（最高优先级）
             if (placingOperator && !opt.target) {
                 const p = canvas.getPointer(opt.e);
                 placeOperator(p, placingOperator);
@@ -575,7 +527,18 @@
                 document.getElementById('roomStatus').innerHTML = '干员已放置';
                 return;
             }
-            // 其他工具
+
+            // 2. 平移（仅选择工具且点击空白区域）
+            if (currentTool === 'select' && !opt.target) {
+                panning = true;
+                lastPos = canvas.getPointer(opt.e);
+                canvas.selection = false;
+                canvas.defaultCursor = 'grab';
+                opt.e.preventDefault();
+                return;
+            }
+
+            // 3. 其他工具（圆形、文字、删除）
             if (currentTool === 'circle' && !opt.target) {
                 const p = canvas.getPointer(opt.e);
                 const name = prompt('输入标记名称:', '点');
@@ -591,8 +554,28 @@
             }
         });
 
-        // 尝试加载默认地图
-        loadMapFromPath('images/clubhouse.jpg');
+        // 鼠标移动（用于平移）
+        canvas.on('mouse:move', (opt) => {
+            if (panning) {
+                const cur = canvas.getPointer(opt.e);
+                canvas.relativePan({ x: cur.x - lastPos.x, y: cur.y - lastPos.y });
+                lastPos = cur;
+                canvas.renderAll();
+                opt.e.preventDefault();
+            }
+        });
+
+        // 鼠标松开（结束平移）
+        canvas.on('mouse:up', () => {
+            if (panning) {
+                panning = false;
+                canvas.selection = false;   // 恢复为禁用多选
+                canvas.defaultCursor = 'default';
+            }
+        });
+
+        // 尝试加载默认地图（改为与下拉菜单一致的 BANK.jpg）
+        loadMapFromPath('images/BANK.jpg');
         // 添加示例圆形
         canvas.add(createNamedCircle(200, 200, 'A点'));
         canvas.add(createNamedCircle(500, 300, 'B点'));
