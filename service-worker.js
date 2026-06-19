@@ -1,7 +1,7 @@
 const CACHE_NAME = 'lino-tactical-v1';
 const urlsToCache = [
     'index.html',
-    'images/BANK.jpg',      // 默认地图
+    'images/BANK.png',      // 默认地图
     'images/ash.png',       // 至少缓存常用干员图标（可选）
     // 你也可以不缓存所有干员，按需加载
 ];
