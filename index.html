@@ -201,7 +201,7 @@
                 <button id="exportImgBtn">导出PNG</button>
             </div>
         </div>
-        <div class="status">💡 空格+拖拽 平移 | 滚轮缩放 | 点击干员图标后点击画布放置</div>
+        <div class="status">💡 滚轮缩放 | 选择工具下拖拽空白区域平移 | 点击干员图标后点击画布放置</div>
     </div>
 </div>
 
@@ -239,11 +239,13 @@
         resizeCanvas();
         canvas.setBackgroundColor('#1a1d2f', canvas.renderAll.bind(canvas));
 
-        // 缩放平移
+        // ---------- 修改开始：平移逻辑改为选择工具下拖拽空白区域 ----------
         let zoom = 1;
         let panning = false;
         let lastPos = { x: 0, y: 0 };
-        let isSpaceDown = false;
+
+        // 移除空格键监听，不再需要
+        // 滚轮缩放保留
         canvas.on('mouse:wheel', (opt) => {
             const delta = opt.e.deltaY > 0 ? 0.9 : 1.1;
             zoom *= delta;
@@ -252,23 +254,24 @@
             opt.e.preventDefault();
             canvas.renderAll();
         });
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') { isSpaceDown = true; canvas.defaultCursor = 'grab'; e.preventDefault(); }
-        });
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'Space') { isSpaceDown = false; canvas.defaultCursor = 'default'; e.preventDefault(); }
-        });
+
+        // 鼠标按下
         canvas.on('mouse:down', (opt) => {
-            if (isSpaceDown) {
+            // 只有当前工具是 'select' 且点击空白区域（没有目标对象）才进入平移模式
+            if (currentTool === 'select' && !opt.target) {
                 panning = true;
                 lastPos = canvas.getPointer(opt.e);
-                canvas.selection = false;
-                canvas.defaultCursor = 'grabbing';
+                canvas.selection = false;      // 临时禁用选择
+                canvas.defaultCursor = 'grab';
                 opt.e.preventDefault();
+                return; // 阻止后续处理（避免干扰放置干员等）
             }
+            // 其他情况（点击对象或非选择工具）正常处理，交给后续逻辑
         });
+
+        // 鼠标移动
         canvas.on('mouse:move', (opt) => {
-            if (panning && isSpaceDown) {
+            if (panning) {
                 const cur = canvas.getPointer(opt.e);
                 canvas.relativePan({ x: cur.x - lastPos.x, y: cur.y - lastPos.y });
                 lastPos = cur;
@@ -276,11 +279,22 @@
                 opt.e.preventDefault();
             }
         });
+
+        // 鼠标松开
         canvas.on('mouse:up', () => {
-            panning = false;
-            canvas.selection = (currentTool === 'select');
-            canvas.defaultCursor = isSpaceDown ? 'grab' : 'default';
+            if (panning) {
+                panning = false;
+                canvas.selection = true;       // 恢复选择能力（仅在选择工具时有效，由setTool控制）
+                canvas.defaultCursor = 'default';
+                // 确保选择工具时 selection 状态正确
+                if (currentTool === 'select') {
+                    canvas.selection = false;   // 我们已禁用多选，所以这里设为 false
+                }
+            }
         });
+        // ---------- 修改结束 ----------
+
+        // 重置视图
         document.getElementById('resetViewBtn').addEventListener('click', () => {
             zoom = 1;
             canvas.setZoom(1);
@@ -288,7 +302,7 @@
             canvas.renderAll();
         });
 
-        // 多人同步（简化版，但保证不报错）
+        // 多人同步（保持不变）
         let peer = null, isHost = false, connections = [], hostConnection = null, isSyncing = false;
         function sendCanvasUpdate() {
             if (isSyncing) return;
@@ -371,7 +385,8 @@
                 canvas.defaultCursor = 'default';
             }
             canvas.isDrawingMode = false;
-            canvas.selection = (tool === 'select');
+            // 选择工具时禁用多选框选，但允许单击选中
+            canvas.selection = false;   // 始终禁用多选，确保单选
             if (tool === 'pen') {
                 canvas.isDrawingMode = true;
                 canvas.freeDrawingBrush = brush;
@@ -441,7 +456,7 @@
         }
         buildOperatorButtons();
 
-        // 安全的图片加载函数（带错误处理，兼容 file 协议）
+        // 安全的图片加载函数
         function loadImageSafe(url, callback, errorCallback) {
             const img = new Image();
             img.crossOrigin = 'Anonymous';
@@ -462,7 +477,6 @@
                 canvas.renderAll();
                 sendCanvasUpdate();
             }, () => {
-                // 后备圆形
                 const fallback = createNamedCircle(pointer.x, pointer.y, operatorId);
                 canvas.add(fallback);
                 canvas.renderAll();
@@ -537,9 +551,15 @@
         document.getElementById('deleteTool').onclick = () => setTool('delete');
         document.getElementById('clearBtn').onclick = () => { if (confirm('清空所有标记？')) clearCanvas(); };
 
-        // 鼠标事件整合
+        // 鼠标事件整合（干员放置、圆形、文字、删除等）
         canvas.on('mouse:down', (opt) => {
-            if (isSpaceDown) return;
+            // 如果正在平移，不处理其他操作（已经在前面 return 了）
+            // 但平移逻辑在之前的 mouse:down 中已经处理并 return，所以这里不会重复
+            // 注意：之前的 mouse:down 中如果进入平移模式会 return，所以下面的代码不会执行
+            // 但为了保险，这里再加一个检查
+            if (panning) return;
+
+            // 干员放置
             if (placingOperator && !opt.target) {
                 const p = canvas.getPointer(opt.e);
                 placeOperator(p, placingOperator);
@@ -549,6 +569,7 @@
                 document.getElementById('roomStatus').innerHTML = '干员已放置';
                 return;
             }
+            // 其他工具
             if (currentTool === 'circle' && !opt.target) {
                 const p = canvas.getPointer(opt.e);
                 const name = prompt('输入标记名称:', '点');
@@ -564,7 +585,7 @@
             }
         });
 
-        // 尝试加载默认地图（若图片不存在则静默失败）
+        // 尝试加载默认地图
         loadMapFromPath('images/clubhouse.jpg');
         // 添加示例圆形
         canvas.add(createNamedCircle(200, 200, 'A点'));
