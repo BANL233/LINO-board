@@ -135,24 +135,6 @@
     }
 </script>
 <body>
-    <button id="installBtn" style="position:fixed; bottom:100px; right:20px; z-index:9999; background:#ff8c00; border:none; padding:10px 20px; border-radius:30px; color:#fff; font-weight:bold; cursor:pointer;">📲 安装应用</button>
-<script>
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        document.getElementById('installBtn').style.display = 'block';
-    });
-    document.getElementById('installBtn').addEventListener('click', async () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const result = await deferredPrompt.userChoice;
-            console.log('用户选择:', result.outcome);
-            deferredPrompt = null;
-            document.getElementById('installBtn').style.display = 'none';
-        }
-    });
-</script>
 <canvas id="tacticalCanvas"></canvas>
 
 <div class="floating-panel">
@@ -265,29 +247,28 @@
         resizeCanvas();
         canvas.setBackgroundColor('#1a1d2f', canvas.renderAll.bind(canvas));
 
-        // ---------- 平移逻辑 ----------
-        let zoom = 1;
-        let panning = false;
-        let lastPos = { x: 0, y: 0 };
+// ---------- 平移逻辑 ----------
+let zoom = 1;
+let panning = false;
+let lastPos = { x: 0, y: 0 };
 
-        // 滚轮缩放
-        canvas.on('mouse:wheel', (opt) => {
-            const delta = opt.e.deltaY > 0 ? 0.9 : 1.1;
-            zoom *= delta;
-            zoom = Math.min(Math.max(zoom, 0.2), 5);
-            canvas.setZoom(zoom);
-            opt.e.preventDefault();
-            canvas.renderAll();
-        });
+// 滚轮缩放（以鼠标为中心）
+canvas.on('mouse:wheel', (opt) => {
+    opt.e.preventDefault();
+    const delta = opt.e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.min(Math.max(zoom * delta, 0.2), 5);
+    const pointer = canvas.getPointer(opt.e);
+    canvas.zoomToPoint(new fabric.Point(pointer.x, pointer.y), newZoom);
+    zoom = newZoom;
+    canvas.renderAll();
+});
 
-        // 重置视图
-        document.getElementById('resetViewBtn').addEventListener('click', () => {
-            zoom = 1;
-            canvas.setZoom(1);
-            canvas.absolutePan({ x: 0, y: 0 });
-            canvas.renderAll();
-        });
-
+// 重置视图
+document.getElementById('resetViewBtn').addEventListener('click', () => {
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    zoom = 1;
+    canvas.renderAll();
+});
         // 多人同步（保持不变）
         let peer = null, isHost = false, connections = [], hostConnection = null, isSyncing = false;
         function sendCanvasUpdate() {
@@ -602,7 +583,7 @@
         });
 
         // 尝试加载默认地图（改为与下拉菜单一致的 BANK.jpg）
-        loadMapFromPath('images/BANK.png');
+        loadMapFromPath('images/BANK.jpg');
         // 添加示例圆形
         canvas.add(createNamedCircle(200, 200, 'A点'));
         canvas.add(createNamedCircle(500, 300, 'B点'));
